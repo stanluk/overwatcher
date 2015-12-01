@@ -24,10 +24,18 @@ func main() {
 	stopCmd := flag.NewFlagSet("stop", flag.ExitOnError)
 
 	reasonCmd := flag.NewFlagSet("reason", flag.ExitOnError)
-	dayFlag := reasonCmd.String("day", "", "2015-Jan-01")
+	dayFlag := reasonCmd.String("day", time.Now().String(), "day to update in YYYY-Month-DD format")
+	reasonFlag := reasonCmd.String("r", "", "reson of overtime")
 
 	if len(os.Args) == 1 {
-		fmt.Println("Invalid usage")
+		fmt.Println("overwatcher <command>")
+		fmt.Println("")
+		fmt.Println("work time logging")
+		fmt.Println("\tstart - log workday start")
+		fmt.Println("\tend - log workday end (can be called multiples times a day)")
+		fmt.Println("")
+		fmt.Println("work time report")
+		fmt.Println("\treport - genereate overtime report")
 		os.Exit(1)
 	}
 
@@ -39,17 +47,17 @@ func main() {
 	case "reason":
 		reasonCmd.Parse(os.Args[2:])
 	default:
-		log.Fatal("%q is not valid command")
+		log.Fatal("%q is not valid command", os.Args[1])
 	}
 
 	if startCmd.Parsed() {
-		err = StartWork()
+		err = StartWork(time.Now())
 		if err != nil {
 			log.Fatal(err)
 		}
 	}
 	if stopCmd.Parsed() {
-		err = EndWork()
+		err = EndWork(time.Now())
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -59,16 +67,15 @@ func main() {
 		if *dayFlag == "" {
 			day = time.Now()
 		} else {
-			day, err = time.Parse("2015-Jan-01", *dayFlag)
+			day, err = time.Parse("2006-Jan-02", *dayFlag)
 			if err != nil {
-				log.Fatal(err)
+				log.Fatal("failed: ", err)
 			}
 		}
-		err = GiveReason("", day)
+		err = GiveReason(*reasonFlag, day)
 		if err != nil {
 			log.Fatal(err)
 		}
 	}
-
 	ShutdownSqlDb()
 }

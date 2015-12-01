@@ -36,8 +36,7 @@ func ShutdownSqlDb() error {
 	return db.Close()
 }
 
-func StartWork() error {
-	now := time.Now()
+func StartWork(now time.Time) error {
 	res, err := db.Exec("INSERT INTO overtimes VALUES (DATE(?), ?, ?, ?);", now, now, now, "")
 	if err != nil {
 		return err
@@ -52,8 +51,8 @@ func StartWork() error {
 	return nil
 }
 
-func EndWork() error {
-	res, err := db.Exec("UPDATE overtimes SET end=? WHERE day=DATE(?)", time.Now(), time.Now())
+func EndWork(now time.Time) error {
+	res, err := db.Exec("UPDATE overtimes SET end=? WHERE day=DATE(?)", now, now)
 	if err != nil {
 		return err
 	}
