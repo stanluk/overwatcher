@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path"
 	"time"
 )
 
@@ -16,7 +17,11 @@ overwatch report --template="" --from="" --to=""
 */
 
 func main() {
-	err := InitSqlDb("/home/stanluk/.overtimes")
+	var workdir string = os.Getenv("HOME")
+	if workdir == "" {
+		workdir, _ = os.Getwd()
+	}
+	err := InitSqlDb(path.Join(workdir, ".overwatcher.db"))
 	if err != nil {
 		log.Fatal(err)
 	}
