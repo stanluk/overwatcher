@@ -12,8 +12,9 @@ import (
 /*
 overwatch start
 overwatch stop
-overwatch reason --day="12121" <MSG>
-overwatch report --template="" --from="" --to=""
+overwatch overtime --day="12121" --reason="MSG"
+overwarch status --announce --day-length=8h --day="2015-12-11"
+overwatch report --template="<path>" --from="" --to="" --day-length=8h --after=1h
 */
 
 func main() {
@@ -28,9 +29,9 @@ func main() {
 	startCmd := flag.NewFlagSet("start", flag.ExitOnError)
 	stopCmd := flag.NewFlagSet("stop", flag.ExitOnError)
 
-	reasonCmd := flag.NewFlagSet("reason", flag.ExitOnError)
-	dayFlag := reasonCmd.String("day", time.Now().String(), "day to update in YYYY-Month-DD format")
-	reasonFlag := reasonCmd.String("r", "", "reson of overtime")
+	overtimeCmd := flag.NewFlagSet("overtime", flag.ExitOnError)
+	dayFlag := overtimeCmd.String("day", time.Now().Format("2006-Jan-02"), "day to update in YYYY-Month-DD format")
+	reasonFlag := overtimeCmd.String("reason", "", "reson of overtime")
 
 	if len(os.Args) == 1 {
 		fmt.Println("overwatcher <command>")
@@ -38,9 +39,9 @@ func main() {
 		fmt.Println("work time logging")
 		fmt.Println("\tstart - log workday start")
 		fmt.Println("\tend - log workday end (can be called multiples times a day)")
-		fmt.Println("")
-		fmt.Println("work time report")
-		fmt.Println("\treport - genereate overtime report")
+		fmt.Println("\tovertime - add info about overtime")
+		fmt.Println("\tstatus - log info about work day")
+		fmt.Println("\treport - genereate overtimes report")
 		os.Exit(1)
 	}
 
@@ -49,8 +50,8 @@ func main() {
 		startCmd.Parse(os.Args[2:])
 	case "stop":
 		stopCmd.Parse(os.Args[2:])
-	case "reason":
-		reasonCmd.Parse(os.Args[2:])
+	case "overtime":
+		overtimeCmd.Parse(os.Args[2:])
 	default:
 		log.Fatal("%q is not valid command", os.Args[1])
 	}
@@ -67,7 +68,7 @@ func main() {
 			log.Fatal(err)
 		}
 	}
-	if reasonCmd.Parsed() {
+	if overtimeCmd.Parsed() {
 		var day time.Time
 		if *dayFlag == "" {
 			day = time.Now()

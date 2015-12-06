@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-type Overtime struct {
+type WorkLog struct {
 	Start  time.Time
 	End    time.Time
 	Reason string
@@ -78,14 +78,14 @@ func GiveReason(reason string, when time.Time) error {
 	return nil
 }
 
-func OvertimesReport(start, end time.Timer) ([]*Overtime, error) {
-	var ret []*Overtime
+func OvertimesReport(start, end time.Timer) ([]*WorkLog, error) {
+	var ret []*WorkLog
 	rows, err := db.Query("SELECT * FROM overtimes")
 	if err != nil {
 		return nil, err
 	}
 	for rows.Next() {
-		ot := &Overtime{}
+		ot := &WorkLog{}
 		err = rows.Scan(&ot.Start, &ot.End, &ot.Reason)
 		if err != nil {
 			return nil, err
