@@ -2,7 +2,6 @@ package main
 
 import (
 	"database/sql"
-	"errors"
 	"fmt"
 	_ "github.com/mattn/go-sqlite3"
 	"time"
@@ -16,7 +15,7 @@ type WorkLog struct {
 
 var db *sql.DB
 
-func InitSqlDb(path string) error {
+func InitSQLDb(path string) error {
 	var err error
 	db, err = sql.Open("sqlite3", path)
 	if err != nil {
@@ -32,9 +31,7 @@ func InitSqlDb(path string) error {
 	return err
 }
 
-func ShutdownSqlDb() error {
-	return db.Close()
-}
+func ShutdownSQLDb() error { return db.Close() }
 
 func StartWork(now time.Time) error {
 	res, err := db.Exec("INSERT INTO overtimes VALUES (DATE(?), ?, ?, ?);", now, now, now, "")
@@ -46,7 +43,7 @@ func StartWork(now time.Time) error {
 		return err
 	}
 	if ra <= 0 {
-		return errors.New(fmt.Sprintf("Unable to insert record %s", now.String()))
+		return fmt.Errorf(fmt.Sprintf("Unable to insert record %s", now.String()))
 	}
 	return nil
 }
@@ -61,7 +58,7 @@ func EndWork(now time.Time) error {
 		return err
 	}
 	if ra <= 0 {
-		return errors.New(fmt.Sprintf("No work record from day %s", time.Now().String()))
+		return fmt.Errorf(fmt.Sprintf("No work record from day %s", time.Now().String()))
 	}
 	return nil
 }
@@ -73,7 +70,7 @@ func GiveReason(reason string, when time.Time) error {
 	}
 	rows, err := res.RowsAffected()
 	if err != nil || rows <= 0 {
-		return errors.New(fmt.Sprintf("No work record from day %s", when.String()))
+		return fmt.Errorf(fmt.Sprintf("No work record from day %s", when.String()))
 	}
 	return nil
 }

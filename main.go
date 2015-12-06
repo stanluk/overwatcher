@@ -18,11 +18,11 @@ overwatch report --template="<path>" --from="" --to="" --day-length=8h --after=1
 */
 
 func main() {
-	var workdir string = os.Getenv("HOME")
+	workdir := os.Getenv("HOME")
 	if workdir == "" {
 		workdir, _ = os.Getwd()
 	}
-	err := InitSqlDb(path.Join(workdir, ".overwatcher.db"))
+	err := InitSQLDb(path.Join(workdir, ".overwatcher.db"))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -45,15 +45,21 @@ func main() {
 		os.Exit(1)
 	}
 
+	err = nil
+
 	switch os.Args[1] {
 	case "start":
-		startCmd.Parse(os.Args[2:])
+		err = startCmd.Parse(os.Args[2:])
 	case "stop":
-		stopCmd.Parse(os.Args[2:])
+		err = stopCmd.Parse(os.Args[2:])
 	case "overtime":
-		overtimeCmd.Parse(os.Args[2:])
+		err = overtimeCmd.Parse(os.Args[2:])
 	default:
-		log.Fatal("%q is not valid command", os.Args[1])
+		log.Fatalf("%q is not valid command", os.Args[1])
+	}
+
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	if startCmd.Parsed() {
@@ -83,5 +89,8 @@ func main() {
 			log.Fatal(err)
 		}
 	}
-	ShutdownSqlDb()
+	err = ShutdownSQLDb()
+	if err != nil {
+		log.Fatal(err)
+	}
 }
