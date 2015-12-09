@@ -34,18 +34,12 @@ func InitSQLDb(path string) error {
 func ShutdownSQLDb() error { return db.Close() }
 
 func StartWork(now time.Time) error {
-	res, err := db.Exec("INSERT INTO overtimes VALUES (DATE(?), ?, ?, ?);", now, now, now, "")
+	res, err := db.Exec("INSERT INTO overtimes SELECT DATE(?), ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM overtimes WHERE day=DATE(?));", now, now, now, "", now)
 	if err != nil {
 		return err
 	}
-	ra, err := res.LastInsertId()
-	if err != nil {
-		return err
-	}
-	if ra <= 0 {
-		return fmt.Errorf(fmt.Sprintf("Unable to insert record %s", now.String()))
-	}
-	return nil
+	_, err = res.LastInsertId()
+	return err
 }
 
 func EndWork(now time.Time) error {
