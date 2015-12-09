@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Overwatcher Start
+GenericName=Log worday start
+Exec=overwatcher start
+Terminal=false
+Type=Application
+StartupNotify=false
+Categories=Utility

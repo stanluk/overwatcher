@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Overwatcher Stop
+GenericName=Log worday stop
+Exec=overwatcher stop
+Terminal=false
+Type=Application
+StartupNotify=false
+Categories=Utility
