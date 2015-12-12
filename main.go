@@ -12,7 +12,7 @@ import (
 /*
 overwatch start
 overwatch stop
-overwatch overtime --day="12121" --reason="MSG"
+overwatch update --day="12121" --reason="MSG" --start="hour" --stop="hour"
 overwarch status --announce --day-length=8h --day="2015-12-11"
 overwatch report --template="<path>" --from="" --to="" --day-length=8h --after=1h
 */
@@ -29,9 +29,11 @@ func main() {
 	startCmd := flag.NewFlagSet("start", flag.ExitOnError)
 	stopCmd := flag.NewFlagSet("stop", flag.ExitOnError)
 
-	overtimeCmd := flag.NewFlagSet("overtime", flag.ExitOnError)
-	dayFlag := overtimeCmd.String("day", time.Now().Format("2006-Jan-02"), "day to update in YYYY-Month-DD format")
-	reasonFlag := overtimeCmd.String("reason", "", "reson of overtime")
+	updateCmd := flag.NewFlagSet("update", flag.ExitOnError)
+	dayFlag := updateCmd.String("day", time.Now().Format("2006-Jan-02"), "day to update in YYYY-Month-DD format")
+	startFlag := updateCmd.String("start", "", "work start hour HH:MM")
+	stopFlag := updateCmd.String("stop", "", "work stop hour HH:MM")
+	reasonFlag := updateCmd.String("reason", "", "reson of overtime")
 
 	if len(os.Args) == 1 {
 		fmt.Println("overwatcher <command>")
@@ -52,8 +54,8 @@ func main() {
 		err = startCmd.Parse(os.Args[2:])
 	case "stop":
 		err = stopCmd.Parse(os.Args[2:])
-	case "overtime":
-		err = overtimeCmd.Parse(os.Args[2:])
+	case "update":
+		err = updateCmd.Parse(os.Args[2:])
 	default:
 		log.Fatalf("%q is not valid command", os.Args[1])
 	}
@@ -74,8 +76,9 @@ func main() {
 			log.Fatal(err)
 		}
 	}
-	if overtimeCmd.Parsed() {
+	if updateCmd.Parsed() {
 		var day time.Time
+		var start, stop time.Time
 		if *dayFlag == "" {
 			day = time.Now()
 		} else {
@@ -84,7 +87,19 @@ func main() {
 				log.Fatal("failed: ", err)
 			}
 		}
-		err = GiveReason(*reasonFlag, day)
+		if *startFlag != "" {
+			start, err = time.Parse(time.Kitchen, *startFlag)
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+		if *stopFlag != "" {
+			stop, err = time.Parse(time.Kitchen, *stopFlag)
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+		err = UpdateLog(day, &start, &stop, reasonFlag)
 		if err != nil {
 			log.Fatal(err)
 		}

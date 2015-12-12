@@ -57,14 +57,24 @@ func EndWork(now time.Time) error {
 	return nil
 }
 
-func GiveReason(reason string, when time.Time) error {
-	res, err := db.Exec("UPDATE overtimes SET reason=? WHERE day=DATE(?)", reason, when)
-	if err != nil {
-		return err
+func UpdateLog(day time.Time, start, stop *time.Time, reason *string) error {
+	if reason != nil && *reason != "" {
+		_, err := db.Exec("UPDATE overtimes SET reason=? WHERE day=DATE(?)", *reason, day)
+		if err != nil {
+			return err
+		}
 	}
-	rows, err := res.RowsAffected()
-	if err != nil || rows <= 0 {
-		return fmt.Errorf(fmt.Sprintf("No work record from day %s", when.String()))
+	if start != nil {
+		_, err := db.Exec("UPDATE overtimes SET start=? WHERE day=DATE(?)", *start, day)
+		if err != nil {
+			return err
+		}
+	}
+	if stop != nil {
+		_, err := db.Exec("UPDATE overtimes SET end=? WHERE day=DATE(?)", *stop, day)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
