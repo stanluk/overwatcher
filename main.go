@@ -123,6 +123,11 @@ func main() {
 				log.Fatal("failed: ", err)
 			}
 		}
+		// set work end to current time
+		err = EndWork(time.Now())
+		if err != nil {
+			log.Fatal(err)
+		}
 		logs, err := QueryLogs(day, day)
 		if err != nil {
 			log.Fatal(err)
