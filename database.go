@@ -8,6 +8,7 @@ import (
 )
 
 type WorkLog struct {
+	Day    time.Time
 	Start  time.Time
 	End    time.Time
 	Reason string
@@ -15,9 +16,14 @@ type WorkLog struct {
 
 var db *sql.DB
 
+func (p *WorkLog) String() string {
+	diff := p.End.Sub(p.Start)
+	return fmt.Sprintf(diff.String())
+}
+
 func InitSQLDb(path string) error {
 	var err error
-	db, err = sql.Open("sqlite3", path)
+	db, err = sql.Open("sqlite3", path+"?parseTime=true")
 	if err != nil {
 		return err
 	}
@@ -79,18 +85,22 @@ func UpdateLog(day time.Time, start, stop *time.Time, reason *string) error {
 	return nil
 }
 
-func OvertimesReport(start, end time.Timer) ([]*WorkLog, error) {
+func QueryLogs(from, to time.Time) ([]*WorkLog, error) {
 	var ret []*WorkLog
-	rows, err := db.Query("SELECT * FROM overtimes")
+	rows, err := db.Query("SELECT date(day), time(start), time(end), reason FROM overtimes WHERE day>=DATE(?) AND day<=DATE(?)", from, to)
 	if err != nil {
 		return nil, err
 	}
 	for rows.Next() {
 		ot := &WorkLog{}
-		err = rows.Scan(&ot.Start, &ot.End, &ot.Reason)
+		var tms, tme, day string
+		err = rows.Scan(&day, &tms, &tme, &ot.Reason)
 		if err != nil {
 			return nil, err
 		}
+		ot.Day, _ = time.Parse("2006-01-02", day)
+		ot.Start, _ = time.Parse("15:04:05", tms)
+		ot.End, _ = time.Parse("15:04:05", tme)
 		ret = append(ret, ot)
 	}
 	return ret, nil
