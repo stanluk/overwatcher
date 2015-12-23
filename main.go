@@ -63,7 +63,7 @@ func runUpdate(dayFlag, startFlag, stopFlag, reasonFlag *string) {
 	}
 }
 
-func runStatus(dayFlag2 *string) {
+func runStatus(dayFlag2 *string, nowFlag *bool) {
 	var day time.Time
 	var err error
 	if *dayFlag2 == "" {
@@ -81,6 +81,12 @@ func runStatus(dayFlag2 *string) {
 	if len(logs) == 0 {
 		fmt.Println("No worklog")
 		return
+	}
+	if *nowFlag {
+		now := time.Now()
+		end := logs[0].End
+		endNow := time.Date(end.Year(), end.Month(), end.Day(), now.Hour(), now.Minute(), now.Second(), 0, end.Location())
+		logs[0].End = endNow
 	}
 	fmt.Println("Worktime:\t ", logs[0].End.Sub(logs[0].Start).String())
 	fmt.Println("Start:\t", logs[0].Start.Format(time.Kitchen))
@@ -107,6 +113,7 @@ func main() {
 
 	statusCmd := flag.NewFlagSet("status", flag.ExitOnError)
 	dayFlag2 := statusCmd.String("day", time.Now().Format("2006-Jan-02"), "day to query (YYYY-Month-DD)")
+	nowFlag := statusCmd.Bool("now", false, "calculate worktime till now")
 	//announceFlag := statusCmd.Bool("announce", false, "print message on all pseudo terminals")
 	//workdayFlag := statusCmd.String("workday", "8h", "workday length (default=8h)")
 
@@ -151,7 +158,7 @@ func main() {
 		runUpdate(dayFlag, startFlag, stopFlag, reasonFlag)
 	}
 	if statusCmd.Parsed() {
-		runStatus(dayFlag2)
+		runStatus(dayFlag2, nowFlag)
 	}
 	err = ShutdownSQLDb()
 	if err != nil {
