@@ -17,6 +17,76 @@ overwarch status --announce --workday=8h --day="2015-12-11"
 overwatch report --template="<path>" --from="" --to="" --workday=8h --after=1h --gran=30m
 */
 
+func runStart() {
+	err := StartWork(time.Now())
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func runEnd() {
+	err := EndWork(time.Now())
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func runUpdate(dayFlag, startFlag, stopFlag, reasonFlag *string) {
+	var day time.Time
+	var start, stop *time.Time
+	var err error
+	if *dayFlag == "" {
+		day = time.Now()
+	} else {
+		day, err = time.Parse("2006-Jan-02", *dayFlag)
+		if err != nil {
+			log.Fatal("failed: ", err)
+		}
+	}
+	if *startFlag != "" {
+		sta, err := time.Parse(time.Kitchen, *startFlag)
+		if err != nil {
+			log.Fatal(err)
+		}
+		start = &sta
+	}
+	if *stopFlag != "" {
+		sto, err := time.Parse(time.Kitchen, *stopFlag)
+		if err != nil {
+			log.Fatal(err)
+		}
+		stop = &sto
+	}
+	err = UpdateLog(day, start, stop, reasonFlag)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func runStatus(dayFlag2 *string) {
+	var day time.Time
+	var err error
+	if *dayFlag2 == "" {
+		day = time.Now()
+	} else {
+		day, err = time.Parse("2006-Jan-02", *dayFlag2)
+		if err != nil {
+			log.Fatal("failed: ", err)
+		}
+	}
+	logs, err := QueryLogs(day, day)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if len(logs) == 0 {
+		fmt.Println("No worklog")
+		return
+	}
+	fmt.Println("Worktime:\t ", logs[0].End.Sub(logs[0].Start).String())
+	fmt.Println("Start:\t", logs[0].Start.Format(time.Kitchen))
+	fmt.Println("End:\t", logs[0].End.Format(time.Kitchen))
+}
+
 func main() {
 	workdir := os.Getenv("HOME")
 	if workdir == "" {
@@ -72,71 +142,16 @@ func main() {
 	}
 
 	if startCmd.Parsed() {
-		err = StartWork(time.Now())
-		if err != nil {
-			log.Fatal(err)
-		}
+		runStart()
 	}
 	if stopCmd.Parsed() {
-		err = EndWork(time.Now())
-		if err != nil {
-			log.Fatal(err)
-		}
+		runEnd()
 	}
 	if updateCmd.Parsed() {
-		var day time.Time
-		var start, stop *time.Time
-		if *dayFlag == "" {
-			day = time.Now()
-		} else {
-			day, err = time.Parse("2006-Jan-02", *dayFlag)
-			if err != nil {
-				log.Fatal("failed: ", err)
-			}
-		}
-		if *startFlag != "" {
-			sta, err := time.Parse(time.Kitchen, *startFlag)
-			if err != nil {
-				log.Fatal(err)
-			}
-			start = &sta
-		}
-		if *stopFlag != "" {
-			sto, err := time.Parse(time.Kitchen, *stopFlag)
-			if err != nil {
-				log.Fatal(err)
-			}
-			stop = &sto
-		}
-		err = UpdateLog(day, start, stop, reasonFlag)
-		if err != nil {
-			log.Fatal(err)
-		}
+		runUpdate(dayFlag, startFlag, stopFlag, reasonFlag)
 	}
 	if statusCmd.Parsed() {
-		var day time.Time
-		if *dayFlag2 == "" {
-			day = time.Now()
-		} else {
-			day, err = time.Parse("2006-Jan-02", *dayFlag2)
-			if err != nil {
-				log.Fatal("failed: ", err)
-			}
-		}
-		// set work end to current time
-		err = EndWork(time.Now())
-		if err != nil {
-			log.Fatal(err)
-		}
-		logs, err := QueryLogs(day, day)
-		if err != nil {
-			log.Fatal(err)
-		}
-		if len(logs) == 0 {
-			fmt.Println("No worklog")
-			return
-		}
-		fmt.Println(logs)
+		runStatus(dayFlag2)
 	}
 	err = ShutdownSQLDb()
 	if err != nil {
