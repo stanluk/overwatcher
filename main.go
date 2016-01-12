@@ -12,7 +12,7 @@ import (
 /*
 overwatch start
 overwatch stop
-overwatch update --day="12121" --reason="MSG" --start="hour" --stop="hour"
+overwatch overtime --day="12121" --reason="MSG"
 overwarch status --announce --workday=8h --day="2015-12-11"
 overwatch report --template="<path>" --from="" --to="" --workday=8h --after=1h --gran=30m
 */
@@ -31,9 +31,8 @@ func runEnd() {
 	}
 }
 
-func runUpdate(dayFlag, startFlag, stopFlag, reasonFlag *string) {
+func updateOvertime(dayFlag, reasonFlag *string) {
 	var day time.Time
-	var start, stop *time.Time
 	var err error
 	if *dayFlag == "" {
 		day = time.Now()
@@ -43,27 +42,13 @@ func runUpdate(dayFlag, startFlag, stopFlag, reasonFlag *string) {
 			log.Fatal("failed: ", err)
 		}
 	}
-	if *startFlag != "" {
-		sta, err := time.Parse(time.Kitchen, *startFlag)
-		if err != nil {
-			log.Fatal(err)
-		}
-		start = &sta
-	}
-	if *stopFlag != "" {
-		sto, err := time.Parse(time.Kitchen, *stopFlag)
-		if err != nil {
-			log.Fatal(err)
-		}
-		stop = &sto
-	}
-	err = UpdateLog(day, start, stop, reasonFlag)
+	err = UpdateOvertime(day, reasonFlag)
 	if err != nil {
 		log.Fatal(err)
 	}
 }
 
-func runStatus(dayFlag2 *string, nowFlag *bool) {
+func checkStatus(dayFlag2 *string, announce bool) {
 	var day time.Time
 	var err error
 	if *dayFlag2 == "" {
@@ -82,15 +67,8 @@ func runStatus(dayFlag2 *string, nowFlag *bool) {
 		fmt.Println("No worklog")
 		return
 	}
-	if *nowFlag {
-		now := time.Now()
-		end := logs[0].End
-		endNow := time.Date(end.Year(), end.Month(), end.Day(), now.Hour(), now.Minute(), now.Second(), 0, end.Location())
-		logs[0].End = endNow
-	}
-	fmt.Println("Worktime:\t ", logs[0].End.Sub(logs[0].Start).String())
-	fmt.Println("Start:\t", logs[0].Start.Format(time.Kitchen))
-	fmt.Println("End:\t", logs[0].End.Format(time.Kitchen))
+	fmt.Println("Worktime:\t ", logs[0].TotalLen.String())
+	fmt.Println("Net workime:\t ", logs[0].NetLen.String())
 }
 
 func main() {
@@ -102,19 +80,18 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer ShutdownSQLDb()
+
 	startCmd := flag.NewFlagSet("start", flag.ExitOnError)
 	stopCmd := flag.NewFlagSet("stop", flag.ExitOnError)
 
-	updateCmd := flag.NewFlagSet("update", flag.ExitOnError)
-	dayFlag := updateCmd.String("day", time.Now().Format("2006-Jan-02"), "day to update (YYYY-Month-DD)")
-	startFlag := updateCmd.String("start", "", "work start hour HH:MM")
-	stopFlag := updateCmd.String("stop", "", "work stop hour HH:MM")
-	reasonFlag := updateCmd.String("reason", "", "reson of overtime")
+	overtimeCmd := flag.NewFlagSet("update", flag.ExitOnError)
+	dayFlag := overtimeCmd.String("day", time.Now().Format("2006-Jan-02"), "day to update (YYYY-Month-DD)")
+	reasonFlag := overtimeCmd.String("reason", "", "reson of overtime")
 
 	statusCmd := flag.NewFlagSet("status", flag.ExitOnError)
 	dayFlag2 := statusCmd.String("day", time.Now().Format("2006-Jan-02"), "day to query (YYYY-Month-DD)")
-	nowFlag := statusCmd.Bool("now", false, "calculate worktime till now")
-	//announceFlag := statusCmd.Bool("announce", false, "print message on all pseudo terminals")
+	announceFlag := statusCmd.Bool("announce", false, "print message on all pseudo terminals")
 	//workdayFlag := statusCmd.String("workday", "8h", "workday length (default=8h)")
 
 	if len(os.Args) == 1 {
@@ -123,7 +100,7 @@ func main() {
 		fmt.Println("work time logging")
 		fmt.Println("\tstart - log workday start")
 		fmt.Println("\tend - log workday end (can be called multiples times a day)")
-		fmt.Println("\tupdate - add info about overtime")
+		fmt.Println("\tovertime - add info about overtime")
 		fmt.Println("\tstatus - log info about work day")
 		fmt.Println("\treport - genereate overtimes report")
 		os.Exit(1)
@@ -136,32 +113,26 @@ func main() {
 		err = startCmd.Parse(os.Args[2:])
 	case "stop":
 		err = stopCmd.Parse(os.Args[2:])
-	case "update":
-		err = updateCmd.Parse(os.Args[2:])
+	case "overtime":
+		err = overtimeCmd.Parse(os.Args[2:])
 	case "status":
 		err = statusCmd.Parse(os.Args[2:])
 	default:
 		log.Fatalf("%q is not valid command", os.Args[1])
 	}
-
 	if err != nil {
 		log.Fatal(err)
 	}
-
 	if startCmd.Parsed() {
 		runStart()
 	}
 	if stopCmd.Parsed() {
 		runEnd()
 	}
-	if updateCmd.Parsed() {
-		runUpdate(dayFlag, startFlag, stopFlag, reasonFlag)
+	if overtimeCmd.Parsed() {
+		updateOvertime(dayFlag, reasonFlag)
 	}
 	if statusCmd.Parsed() {
-		runStatus(dayFlag2, nowFlag)
-	}
-	err = ShutdownSQLDb()
-	if err != nil {
-		log.Fatal(err)
+		checkStatus(dayFlag2, *announceFlag)
 	}
 }
