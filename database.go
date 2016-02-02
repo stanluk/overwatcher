@@ -34,7 +34,7 @@ func InitSQLDb(path string) error {
 func ShutdownSQLDb() error { return db.Close() }
 
 func StartWork(tm time.Time) error {
-	res, err := db.Exec("INSERT INTO worklog VALUES(?, 1);", tm)
+	res, err := db.Exec("INSERT INTO worklog VALUES(?, 1);", tm.UTC())
 	if err != nil {
 		return err
 	}
@@ -43,7 +43,7 @@ func StartWork(tm time.Time) error {
 }
 
 func EndWork(tm time.Time) error {
-	res, err := db.Exec("INSERT INTO worklog VALUES(?, 0);", tm)
+	res, err := db.Exec("INSERT INTO worklog VALUES(?, 0);", tm.UTC())
 	if err != nil {
 		return err
 	}
