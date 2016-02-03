@@ -26,24 +26,17 @@ func InitSQLDb(path string) error {
 		return err
 	}
 	_, err = db.Exec(
-		`CREATE TABLE IF NOT EXISTS worklog (day time PRIMARY KEY, status INTEGER);
+		`CREATE TABLE IF NOT EXISTS worklog (start timestamp, end timestamp,
+			PRIMARY KEY(start, end),
+			CHECK (start<end));
 		 CREATE TABLE IF NOT EXISTS overtimes (day date PRIMARY KEY, reason varchar(256));`)
 	return err
 }
 
 func ShutdownSQLDb() error { return db.Close() }
 
-func StartWork(tm time.Time) error {
-	res, err := db.Exec("INSERT INTO worklog VALUES(?, 1);", tm.UTC())
-	if err != nil {
-		return err
-	}
-	_, err = res.LastInsertId()
-	return err
-}
-
-func EndWork(tm time.Time) error {
-	res, err := db.Exec("INSERT INTO worklog VALUES(?, 0);", tm.UTC())
+func CreateWorkLog(start, end time.Time) error {
+	res, err := db.Exec("INSERT INTO worklog VALUES(?, ?);", start.UTC(), end.UTC())
 	if err != nil {
 		return err
 	}

@@ -1,13 +1,18 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"os"
+	"os/user"
 	"path"
 	"time"
 )
+
+var lockFilePath string
 
 /*
 overwatch start
@@ -18,17 +23,40 @@ overwatch report --template="<path>" --from="" --to="" --workday=8h --after=1h -
 */
 
 func runStart() {
-	err := StartWork(time.Now())
+	file, err := os.OpenFile(lockFilePath, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0600)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer file.Close()
+
+	_, err = file.WriteString(time.Now().UTC().Format(time.RFC822Z))
 	if err != nil {
 		log.Fatal(err)
 	}
 }
 
 func runEnd() {
-	err := EndWork(time.Now())
+	file, err := os.Open(lockFilePath)
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer file.Close()
+
+	buf := bufio.NewReader(file)
+	str, err := buf.ReadString('\n')
+	if err != nil && err != io.EOF {
+		log.Fatal(err)
+	}
+	start, err := time.Parse(time.RFC822Z, str)
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = CreateWorkLog(start, time.Now().UTC())
+	if err != nil {
+		log.Fatal(err)
+	}
+	file.Close()
+	os.Remove(lockFilePath)
 }
 
 func updateOvertime(dayFlag, reasonFlag *string) {
@@ -72,15 +100,17 @@ func checkStatus(dayFlag2 *string, announce bool) {
 }
 
 func main() {
-	workdir := os.Getenv("HOME")
-	if workdir == "" {
-		workdir, _ = os.Getwd()
+	usr, err := user.Current()
+	if err != nil {
+		log.Fatal(err)
 	}
-	err := InitSQLDb(path.Join(workdir, ".overwatcher.db"))
+	err = InitSQLDb(path.Join(usr.HomeDir, ".overwatcher.db"))
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer ShutdownSQLDb()
+
+	lockFilePath = path.Join(usr.HomeDir, ".overwatcher.lock")
 
 	startCmd := flag.NewFlagSet("start", flag.ExitOnError)
 	stopCmd := flag.NewFlagSet("stop", flag.ExitOnError)
