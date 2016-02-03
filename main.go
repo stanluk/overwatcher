@@ -95,7 +95,8 @@ func checkStatus(dayFlag2 *string, announce bool) {
 		fmt.Println("No worklog")
 		return
 	}
-	fmt.Println("Worktime:\t ", logs[0].TotalLen.String())
+	fmt.Println("Start:\t ", logs[0].Start.String())
+	fmt.Println("Worktime:\t ", logs[0].TotalLen().String())
 	fmt.Println("Net workime:\t ", logs[0].NetLen.String())
 }
 

@@ -9,11 +9,14 @@ import (
 type WorkLog struct {
 	Start, End     time.Time
 	NetLen         time.Duration
-	TotalLen       time.Duration
 	OvertimeReason string
 }
 
 var db *sql.DB
+
+func (wl *WorkLog) TotalLen() time.Duration {
+	return wl.End.Sub(wl.Start)
+}
 
 func InitSQLDb(path string) error {
 	var err error
@@ -55,5 +58,25 @@ func UpdateOvertime(day time.Time, reason *string) error {
 }
 
 func QueryLogs(from, to time.Time) ([]*WorkLog, error) {
-	return nil, nil
+	var ret []*WorkLog
+
+	rows, err := db.Query(`
+	SELECT strftime('%s', MIN(start)), strftime('%s', MAX(end)), SUM(strftime('%s', end) - strftime('%s', start))
+	FROM worklog
+	WHERE DATE(start)>=DATE(?) AND DATE(end)<=DATE(?)
+	GROUP BY DATE(start), DATE(end);
+	`, from.UTC(), to.UTC())
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		var start, end, netsum int64
+		err := rows.Scan(&start, &end, &netsum)
+		if err != nil {
+			return nil, err
+		}
+		wl := &WorkLog{Start: time.Unix(start, 0), End: time.Unix(end, 0), NetLen: time.Duration(netsum) * time.Second}
+		ret = append(ret, wl)
+	}
+	return ret, nil
 }
