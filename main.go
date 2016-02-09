@@ -76,7 +76,7 @@ func updateOvertime(dayFlag, reasonFlag *string) {
 	}
 }
 
-func checkStatus(dayFlag2 *string, announce bool) {
+func checkStatus(dayFlag2 *string, announce, now bool) {
 	var day time.Time
 	var err error
 	if *dayFlag2 == "" {
@@ -96,7 +96,11 @@ func checkStatus(dayFlag2 *string, announce bool) {
 		return
 	}
 	fmt.Println("Start:\t ", logs[0].Start.String())
-	fmt.Println("Worktime:\t ", logs[0].TotalLen().String())
+	if now {
+		fmt.Println("Worktime(till now):\t ", time.Now().Sub(logs[0].Start).String())
+	} else {
+		fmt.Println("Worktime:\t ", logs[0].TotalLen().String())
+	}
 	fmt.Println("Net workime:\t ", logs[0].NetLen.String())
 }
 
@@ -123,6 +127,7 @@ func main() {
 	statusCmd := flag.NewFlagSet("status", flag.ExitOnError)
 	dayFlag2 := statusCmd.String("day", time.Now().Format("2006-Jan-02"), "day to query (YYYY-Month-DD)")
 	announceFlag := statusCmd.Bool("announce", false, "print message on all pseudo terminals")
+	nowFlag := statusCmd.Bool("now", false, "calculate worktime till now.")
 	//workdayFlag := statusCmd.String("workday", "8h", "workday length (default=8h)")
 
 	if len(os.Args) == 1 {
@@ -164,6 +169,6 @@ func main() {
 		updateOvertime(dayFlag, reasonFlag)
 	}
 	if statusCmd.Parsed() {
-		checkStatus(dayFlag2, *announceFlag)
+		checkStatus(dayFlag2, *announceFlag, *nowFlag)
 	}
 }
