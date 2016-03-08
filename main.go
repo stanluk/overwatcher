@@ -90,7 +90,8 @@ func queryLogs(out io.Writer, from, to time.Time) {
 	}
 	for _, log := range logs {
 		fmt.Println(log.Start.Format(defaultTimeFormat), "\t",
-			log.Start.Format(time.Kitchen), "\t", log.End.Format(time.Kitchen))
+			log.Start.Format(time.Kitchen), "\t", log.End.Format(time.Kitchen),
+			"\t", log.End.Sub(log.Start).String(), "\t", log.NetLen.String())
 	}
 }
 
