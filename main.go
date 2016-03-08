@@ -14,11 +14,13 @@ import (
 
 var lockFilePath string
 
+const defaultTimeFormat string = "2006-Jan-02"
+
 /*
 overwatch start
 overwatch stop
 overwatch overtime --day="12121" --reason="MSG"
-overwarch status --announce --workday=8h --day="2015-12-11"
+overwarch query --from="2015-12-11" --to="2015-12-11" --week --month
 overwatch report --template="<path>" --from="" --to="" --workday=8h --after=1h --gran=30m
 */
 
@@ -76,18 +78,9 @@ func updateOvertime(dayFlag, reasonFlag *string) {
 	}
 }
 
-func checkStatus(dayFlag2 *string, announce, now bool) {
-	var day time.Time
+func queryLogs(out io.Writer, from, to time.Time) {
 	var err error
-	if *dayFlag2 == "" {
-		day = time.Now()
-	} else {
-		day, err = time.Parse("2006-Jan-02", *dayFlag2)
-		if err != nil {
-			log.Fatal("failed: ", err)
-		}
-	}
-	logs, err := QueryLogs(day, day)
+	logs, err := QueryLogs(from, to)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -95,13 +88,11 @@ func checkStatus(dayFlag2 *string, announce, now bool) {
 		fmt.Println("No worklog")
 		return
 	}
-	fmt.Println("Start:\t ", logs[0].Start.String())
-	if now {
-		fmt.Println("Worktime(till now):\t ", time.Now().Sub(logs[0].Start).String())
-	} else {
-		fmt.Println("Worktime:\t ", logs[0].TotalLen().String())
+	for _, log := range logs {
+		fmt.Println("Start:\t ", log.Start.String())
+		fmt.Println("End:\t ", log.End.String())
+		fmt.Println("Net workime:\t ", log.NetLen.String())
 	}
-	fmt.Println("Net workime:\t ", logs[0].NetLen.String())
 }
 
 func main() {
@@ -121,13 +112,14 @@ func main() {
 	stopCmd := flag.NewFlagSet("stop", flag.ExitOnError)
 
 	overtimeCmd := flag.NewFlagSet("update", flag.ExitOnError)
-	dayFlag := overtimeCmd.String("day", time.Now().Format("2006-Jan-02"), "day to update (YYYY-Month-DD)")
+	dayFlag := overtimeCmd.String("day", time.Now().Format(defaultTimeFormat), "day to update (YYYY-Month-DD)")
 	reasonFlag := overtimeCmd.String("reason", "", "reson of overtime")
 
-	statusCmd := flag.NewFlagSet("status", flag.ExitOnError)
-	dayFlag2 := statusCmd.String("day", time.Now().Format("2006-Jan-02"), "day to query (YYYY-Month-DD)")
-	announceFlag := statusCmd.Bool("announce", false, "print message on all pseudo terminals")
-	nowFlag := statusCmd.Bool("now", false, "calculate worktime till now.")
+	queryCmd := flag.NewFlagSet("query", flag.ExitOnError)
+	fromFlag := queryCmd.String("from", time.Now().Format(defaultTimeFormat), "first day to query (YYYY-Month-DD)")
+	toFlag := queryCmd.String("to", time.Now().Format(defaultTimeFormat), "last day to query (YYYY-Month-DD)")
+	//announceFlag := queryCmd.Bool("announce", false, "print message on all pseudo terminals")
+	//nowFlag := queryCmd.Bool("now", false, "calculate worktime till now.")
 	//workdayFlag := statusCmd.String("workday", "8h", "workday length (default=8h)")
 
 	if len(os.Args) == 1 {
@@ -135,9 +127,9 @@ func main() {
 		fmt.Println("")
 		fmt.Println("work time logging")
 		fmt.Println("\tstart - log workday start")
-		fmt.Println("\tend - log workday end (can be called multiples times a day)")
+		fmt.Println("\tstop - log workday end (can be called multiples times a day)")
 		fmt.Println("\tovertime - add info about overtime")
-		fmt.Println("\tstatus - log info about work day")
+		fmt.Println("\tquery - log info about work day")
 		fmt.Println("\treport - genereate overtimes report")
 		os.Exit(1)
 	}
@@ -151,8 +143,8 @@ func main() {
 		err = stopCmd.Parse(os.Args[2:])
 	case "overtime":
 		err = overtimeCmd.Parse(os.Args[2:])
-	case "status":
-		err = statusCmd.Parse(os.Args[2:])
+	case "query":
+		err = queryCmd.Parse(os.Args[2:])
 	default:
 		log.Fatalf("%q is not valid command", os.Args[1])
 	}
@@ -168,7 +160,9 @@ func main() {
 	if overtimeCmd.Parsed() {
 		updateOvertime(dayFlag, reasonFlag)
 	}
-	if statusCmd.Parsed() {
-		checkStatus(dayFlag2, *announceFlag, *nowFlag)
+	if queryCmd.Parsed() {
+		from, _ := time.Parse(defaultTimeFormat, *fromFlag)
+		to, _ := time.Parse(defaultTimeFormat, *toFlag)
+		queryLogs(os.Stdout, from, to)
 	}
 }
