@@ -89,9 +89,8 @@ func queryLogs(out io.Writer, from, to time.Time) {
 		return
 	}
 	for _, log := range logs {
-		fmt.Println("Start:\t ", log.Start.String())
-		fmt.Println("End:\t ", log.End.String())
-		fmt.Println("Net workime:\t ", log.NetLen.String())
+		fmt.Println(log.Start.Format(defaultTimeFormat), "\t",
+			log.Start.Format(time.Kitchen), "\t", log.End.Format(time.Kitchen))
 	}
 }
 
@@ -118,6 +117,8 @@ func main() {
 	queryCmd := flag.NewFlagSet("query", flag.ExitOnError)
 	fromFlag := queryCmd.String("from", time.Now().Format(defaultTimeFormat), "first day to query (YYYY-Month-DD)")
 	toFlag := queryCmd.String("to", time.Now().Format(defaultTimeFormat), "last day to query (YYYY-Month-DD)")
+	weekFlag := queryCmd.Bool("week", false, "print worklog for current week")
+	monthFlag := queryCmd.Bool("month", false, "print worklog for current month")
 	//announceFlag := queryCmd.Bool("announce", false, "print message on all pseudo terminals")
 	//nowFlag := queryCmd.Bool("now", false, "calculate worktime till now.")
 	//workdayFlag := statusCmd.String("workday", "8h", "workday length (default=8h)")
@@ -161,8 +162,17 @@ func main() {
 		updateOvertime(dayFlag, reasonFlag)
 	}
 	if queryCmd.Parsed() {
-		from, _ := time.Parse(defaultTimeFormat, *fromFlag)
-		to, _ := time.Parse(defaultTimeFormat, *toFlag)
+		var to, from time.Time
+		if *weekFlag {
+			to = time.Now()
+			from = time.Date(time.Now().Year(), time.Now().Month(), time.Now().Day()-7, 0, 0, 0, 0, time.Local)
+		} else if *monthFlag {
+			from = time.Date(time.Now().Year(), time.Now().Month(), 1, 0, 0, 0, 0, time.Local)
+			to = from.AddDate(0, 1, 0)
+		} else {
+			from, _ = time.Parse(defaultTimeFormat, *fromFlag)
+			to, _ = time.Parse(defaultTimeFormat, *toFlag)
+		}
 		queryLogs(os.Stdout, from, to)
 	}
 }
