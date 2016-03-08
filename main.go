@@ -85,11 +85,11 @@ func queryLogs(out io.Writer, from, to time.Time) {
 		log.Fatal(err)
 	}
 	if len(logs) == 0 {
-		fmt.Println("No worklog")
+		fmt.Fprint(out, "No worklog")
 		return
 	}
 	for _, log := range logs {
-		fmt.Println(log.Start.Format(defaultTimeFormat), "\t",
+		fmt.Fprint(out, log.Start.Format(defaultTimeFormat), "\t",
 			log.Start.Format(time.Kitchen), "\t", log.End.Format(time.Kitchen),
 			"\t", log.End.Sub(log.Start).String(), "\t", log.NetLen.String())
 	}
