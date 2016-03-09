@@ -31,7 +31,7 @@ func InitSQLDb(path string) error {
 	_, err = db.Exec(
 		`CREATE TABLE IF NOT EXISTS worklog (start timestamp, end timestamp,
 			PRIMARY KEY(start, end),
-			CHECK (start<end));
+			CHECK (start<=end));
 		 CREATE TABLE IF NOT EXISTS overtimes (day date PRIMARY KEY, reason varchar(256));`)
 	return err
 }

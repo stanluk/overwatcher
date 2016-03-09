@@ -25,20 +25,20 @@ overwatch alarm enable <8h> | disable | check
 overwatch report --template="<path>" --from="" --to="" --workday=8h --after=1h --gran=30m
 */
 
-func runStart() {
+func runStart(when time.Time) {
 	file, err := os.OpenFile(lockFilePath, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0600)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer file.Close()
 
-	_, err = file.WriteString(time.Now().UTC().Format(time.RFC822Z))
+	_, err = file.WriteString(when.UTC().Format(time.RFC822Z))
 	if err != nil {
 		log.Fatal(err)
 	}
 }
 
-func runEnd() {
+func runEnd(when time.Time) {
 	file, err := os.Open(lockFilePath)
 	if err != nil {
 		log.Fatal(err)
@@ -54,7 +54,7 @@ func runEnd() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = CreateWorkLog(start, time.Now().UTC())
+	err = CreateWorkLog(start, when.UTC())
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -96,6 +96,11 @@ func queryLogs(out io.Writer, from, to time.Time) {
 	}
 }
 
+func dateFromTodayHour(hour time.Time) time.Time {
+	now := time.Now()
+	return time.Date(now.Year(), now.Month(), now.Day(), hour.Hour(), hour.Minute(), hour.Second(), 0, time.Local)
+}
+
 func main() {
 	usr, err := user.Current()
 	if err != nil {
@@ -111,7 +116,10 @@ func main() {
 	alarmLockFilePath = path.Join(usr.HomeDir, ".overwatcher.alarm")
 
 	startCmd := flag.NewFlagSet("start", flag.ExitOnError)
+	startTime := startCmd.String("time", time.Now().Format(time.Kitchen), "time of workday start")
+
 	stopCmd := flag.NewFlagSet("stop", flag.ExitOnError)
+	endTime := stopCmd.String("time", time.Now().Format(time.Kitchen), "time of workday end")
 
 	overtimeCmd := flag.NewFlagSet("update", flag.ExitOnError)
 	dayFlag := overtimeCmd.String("day", time.Now().Format(defaultTimeFormat), "day to update (YYYY-Month-DD)")
@@ -174,10 +182,18 @@ func main() {
 		log.Fatal(err)
 	}
 	if startCmd.Parsed() {
-		runStart()
+		tm, err := time.Parse(time.Kitchen, *startTime)
+		if err != nil {
+			log.Fatal(err)
+		}
+		runStart(dateFromTodayHour(tm))
 	}
 	if stopCmd.Parsed() {
-		runEnd()
+		tm, err := time.Parse(time.Kitchen, *endTime)
+		if err != nil {
+			log.Fatal(err)
+		}
+		runEnd(dateFromTodayHour(tm))
 	}
 	if overtimeCmd.Parsed() {
 		updateOvertime(dayFlag, reasonFlag)
