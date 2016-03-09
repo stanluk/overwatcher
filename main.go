@@ -12,15 +12,16 @@ import (
 	"time"
 )
 
-var lockFilePath string
+var lockFilePath, alarmLockFilePath string
 
 const defaultTimeFormat string = "2006-Jan-02"
 
 /*
-overwatch start
-overwatch stop
+overwatch start <hour>
+overwatch stop <hour>
 overwatch overtime --day="12121" --reason="MSG"
 overwarch query --from="2015-12-11" --to="2015-12-11" --week --month
+overwatch alarm enable <8h> | disable | check
 overwatch report --template="<path>" --from="" --to="" --workday=8h --after=1h --gran=30m
 */
 
@@ -85,11 +86,11 @@ func queryLogs(out io.Writer, from, to time.Time) {
 		log.Fatal(err)
 	}
 	if len(logs) == 0 {
-		fmt.Fprint(out, "No worklog")
+		fmt.Fprintln(out, "No worklog")
 		return
 	}
 	for _, log := range logs {
-		fmt.Fprint(out, log.Start.Format(defaultTimeFormat), "\t",
+		fmt.Fprintln(out, log.Start.Format(defaultTimeFormat), "\t",
 			log.Start.Format(time.Kitchen), "\t", log.End.Format(time.Kitchen),
 			"\t", log.End.Sub(log.Start).String(), "\t", log.NetLen.String())
 	}
@@ -107,6 +108,7 @@ func main() {
 	defer ShutdownSQLDb()
 
 	lockFilePath = path.Join(usr.HomeDir, ".overwatcher.lock")
+	alarmLockFilePath = path.Join(usr.HomeDir, ".overwatcher.alarm")
 
 	startCmd := flag.NewFlagSet("start", flag.ExitOnError)
 	stopCmd := flag.NewFlagSet("stop", flag.ExitOnError)
@@ -120,9 +122,12 @@ func main() {
 	toFlag := queryCmd.String("to", time.Now().Format(defaultTimeFormat), "last day to query (YYYY-Month-DD)")
 	weekFlag := queryCmd.Bool("week", false, "print worklog for current week")
 	monthFlag := queryCmd.Bool("month", false, "print worklog for current month")
-	//announceFlag := queryCmd.Bool("announce", false, "print message on all pseudo terminals")
-	//nowFlag := queryCmd.Bool("now", false, "calculate worktime till now.")
-	//workdayFlag := statusCmd.String("workday", "8h", "workday length (default=8h)")
+
+	enableAlarmSubCmd := flag.NewFlagSet("enable", flag.ExitOnError)
+	durationLen := enableAlarmSubCmd.Duration("after", time.Hour*8, "Duration since first work start")
+
+	disableAlarmSubCmd := flag.NewFlagSet("disable", flag.ExitOnError)
+	checkAlarmSubCmd := flag.NewFlagSet("check", flag.ExitOnError)
 
 	if len(os.Args) == 1 {
 		fmt.Println("overwatcher <command>")
@@ -132,6 +137,7 @@ func main() {
 		fmt.Println("\tstop - log workday end (can be called multiples times a day)")
 		fmt.Println("\tovertime - add info about overtime")
 		fmt.Println("\tquery - log info about work day")
+		fmt.Println("\talarm - inform about work day end")
 		fmt.Println("\treport - genereate overtimes report")
 		os.Exit(1)
 	}
@@ -147,6 +153,20 @@ func main() {
 		err = overtimeCmd.Parse(os.Args[2:])
 	case "query":
 		err = queryCmd.Parse(os.Args[2:])
+	case "alarm":
+		if len(os.Args) < 3 {
+			log.Fatal("enable|disble|check expected")
+		}
+		switch os.Args[2] {
+		case "enable":
+			err = enableAlarmSubCmd.Parse(os.Args[3:])
+		case "disable":
+			err = disableAlarmSubCmd.Parse(os.Args[3:])
+		case "check":
+			err = checkAlarmSubCmd.Parse(os.Args[3:])
+		default:
+			log.Fatal("enable|disble|check expected")
+		}
 	default:
 		log.Fatalf("%q is not valid command", os.Args[1])
 	}
@@ -175,5 +195,14 @@ func main() {
 			to, _ = time.Parse(defaultTimeFormat, *toFlag)
 		}
 		queryLogs(os.Stdout, from, to)
+	}
+	if enableAlarmSubCmd.Parsed() {
+		log.Println(durationLen)
+	}
+	if disableAlarmSubCmd.Parsed() {
+		log.Println("DISABLE")
+	}
+	if checkAlarmSubCmd.Parsed() {
+		log.Println("CHECK")
 	}
 }
