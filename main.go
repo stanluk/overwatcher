@@ -1,9 +1,9 @@
 package main
 
 import (
-	"bufio"
 	"flag"
 	"fmt"
+	"github.com/stanluk/overwatcher/pts"
 	"io"
 	"log"
 	"os"
@@ -26,40 +26,27 @@ overwatch report --template="<path>" --from="" --to="" --workday=8h --after=1h -
 */
 
 func runStart(when time.Time) {
-	file, err := os.OpenFile(lockFilePath, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0600)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer file.Close()
+	lockfile := Lockfile{lockFilePath}
 
-	_, err = file.WriteString(when.UTC().Format(time.RFC822Z))
+	err := lockfile.TryWriteTime(when)
 	if err != nil {
 		log.Fatal(err)
 	}
 }
 
 func runEnd(when time.Time) {
-	file, err := os.Open(lockFilePath)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer file.Close()
+	lockfile := Lockfile{lockFilePath}
 
-	buf := bufio.NewReader(file)
-	str, err := buf.ReadString('\n')
-	if err != nil && err != io.EOF {
-		log.Fatal(err)
-	}
-	start, err := time.Parse(time.RFC822Z, str)
+	start, err := lockfile.LoadTime()
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	err = CreateWorkLog(start, when.UTC())
 	if err != nil {
 		log.Fatal(err)
 	}
-	file.Close()
-	os.Remove(lockFilePath)
+	lockfile.Remove()
 }
 
 func updateOvertime(dayFlag, reasonFlag *string) {
@@ -99,6 +86,47 @@ func queryLogs(out io.Writer, from, to time.Time) {
 func dateFromTodayHour(hour time.Time) time.Time {
 	now := time.Now()
 	return time.Date(now.Year(), now.Month(), now.Day(), hour.Hour(), hour.Minute(), hour.Second(), 0, time.Local)
+}
+
+func checkAlarm() {
+	alarmlockfile := Lockfile{alarmLockFilePath}
+	lockfile := Lockfile{lockFilePath}
+
+	start, err := lockfile.LoadTime()
+	if err != nil {
+		//FIXME check fle existast error code
+		return
+	}
+	dur, err := alarmlockfile.LoadDuration()
+	if err != nil {
+		log.Fatal(err)
+	}
+	if start.Add(dur).Before(time.Now()) {
+		writer := pts.NewPts()
+
+		fmt.Fprintln(writer, "WORK DAY OVER!!! GO HOME")
+		fmt.Fprintln(writer, "WORK DAY OVER!!! GO HOME")
+		fmt.Fprintln(writer, "WORK DAY OVER!!! GO HOME")
+	}
+}
+
+func enableAlarm(d time.Duration) {
+	file, err := os.OpenFile(alarmLockFilePath, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0600)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer file.Close()
+
+	_, err = file.WriteString(d.String())
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Println("Alarm will trigger after ", d.String())
+}
+
+func disableAlarm() {
+	lockfile := Lockfile{alarmLockFilePath}
+	lockfile.Remove()
 }
 
 func main() {
@@ -213,12 +241,12 @@ func main() {
 		queryLogs(os.Stdout, from, to)
 	}
 	if enableAlarmSubCmd.Parsed() {
-		log.Println(durationLen)
-	}
-	if disableAlarmSubCmd.Parsed() {
-		log.Println("DISABLE")
+		enableAlarm(*durationLen)
 	}
 	if checkAlarmSubCmd.Parsed() {
-		log.Println("CHECK")
+		checkAlarm()
+	}
+	if disableAlarmSubCmd.Parsed() {
+		disableAlarm()
 	}
 }
