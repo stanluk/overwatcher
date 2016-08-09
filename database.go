@@ -2,23 +2,14 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
 	_ "github.com/mattn/go-sqlite3"
 	"time"
 )
 
-type WorkLog struct {
-	Start, End     time.Time
-	NetLen         time.Duration
-	OvertimeReason string
-}
-
 var db *sql.DB
 
-func (wl *WorkLog) TotalLen() time.Duration {
-	return wl.End.Sub(wl.Start)
-}
-
-func InitSQLDb(path string) error {
+func InitDb(path string) error {
 	var err error
 	db, err = sql.Open("sqlite3", path+"?parseTime=true")
 	if err != nil {
@@ -28,55 +19,63 @@ func InitSQLDb(path string) error {
 	if err != nil {
 		return err
 	}
-	_, err = db.Exec(
-		`CREATE TABLE IF NOT EXISTS worklog (start timestamp, end timestamp,
-			PRIMARY KEY(start, end),
-			CHECK (start<=end));
-		 CREATE TABLE IF NOT EXISTS overtimes (day date PRIMARY KEY, reason varchar(256));`)
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS worklog (day date PRIMARY KEY, enter timestamp,
+		leave timestamp, extra INT DEFAULT 0, reason varchar(256));
+		`)
 	return err
 }
 
-func ShutdownSQLDb() error { return db.Close() }
+func ShutdownDb() error { return db.Close() }
 
-func CreateWorkLog(start, end time.Time) error {
-	res, err := db.Exec("INSERT INTO worklog VALUES(?, ?);", start.UTC(), end.UTC())
+func StoreWorkLog(wl *WorkLog) error {
+	res, err := db.Exec(`
+			INSERT OR IGNORE INTO worklog VALUES(DATE(?),?,?,?,?);
+			UPDATE worklog
+			SET enter=?, leave=?, extra=?, reason=? WHERE day=DATE(?);`,
+		wl.EnterTime(), wl.EnterTime(), wl.LeaveTime(), wl.Breaks, wl.OvertimeReason,
+		wl.EnterTime(), wl.LeaveTime(), wl.Breaks, wl.OvertimeReason, wl.EnterTime())
 	if err != nil {
-		return err
+		return fmt.Errorf("StoreWorkLog failed: ", err)
 	}
 	_, err = res.LastInsertId()
 	return err
 }
 
-func UpdateOvertime(day time.Time, reason *string) error {
-	if reason != nil && *reason != "" {
-		_, err := db.Exec("REPLACE INTO overtimes VALUES(?, ?)", day, *reason)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func QueryLogs(from, to time.Time) ([]*WorkLog, error) {
+func QueryWorkLogs(from, to time.Time) ([]*WorkLog, error) {
 	var ret []*WorkLog
 
 	rows, err := db.Query(`
-	SELECT strftime('%s', MIN(start)), strftime('%s', MAX(end)), SUM(strftime('%s', end) - strftime('%s', start))
-	FROM worklog
-	WHERE DATE(start)>=DATE(?) AND DATE(end)<=DATE(?)
-	GROUP BY DATE(start), DATE(end);
-	`, from.UTC(), to.UTC())
+			SELECT strftime('%s', enter), strftime('%s', leave), extra, reason FROM worklog
+			WHERE day>=DATE(?) AND day<=DATE(?);
+		`, from.UTC(), to.UTC())
 	if err != nil {
 		return nil, err
 	}
 	for rows.Next() {
-		var start, end, netsum int64
-		err := rows.Scan(&start, &end, &netsum)
+		wl := WorkLog{}
+		var l, e int64
+		err := rows.Scan(&e, &l, &wl.Breaks, &wl.OvertimeReason)
 		if err != nil {
 			return nil, err
 		}
-		wl := &WorkLog{Start: time.Unix(start, 0), End: time.Unix(end, 0), NetLen: time.Duration(netsum) * time.Second}
-		ret = append(ret, wl)
+		wl.enter = time.Unix(e, 0).Local()
+		wl.leave = time.Unix(l, 0).Local()
+		ret = append(ret, &wl)
 	}
 	return ret, nil
+}
+
+func QueryWorkLog(day time.Time) (*WorkLog, error) {
+	logs, err := QueryWorkLogs(day, day)
+	if err != nil {
+		return nil, err
+	}
+	if len(logs) == 0 {
+		return nil, nil
+	}
+	if len(logs) > 1 {
+		panic("Invalid worklogs count.")
+	}
+	return logs[0], nil
 }

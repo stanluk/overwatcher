@@ -3,250 +3,302 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/stanluk/overwatcher/pts"
 	"io"
 	"log"
 	"os"
 	"os/user"
 	"path"
+	"text/template"
 	"time"
 )
 
-var lockFilePath, alarmLockFilePath string
+var (
+	startCmd  flag.FlagSet // overwatcher start
+	stopCmd   flag.FlagSet // overwatcher stop
+	updateCmd flag.FlagSet // overwatcher update
+	queryCmd  flag.FlagSet // overwatcher query
+	reportCmd flag.FlagSet // overwatcher report
+
+	// overwatcher update flags
+	day    string
+	reason string
+	enter  string
+	leave  string
+	breaks string
+
+	// overwatcher query flags
+	week     bool
+	month    bool
+	fromDate string
+	toDate   string
+
+	// overwatcher report flags
+	templatePath string
+)
 
 const defaultTimeFormat string = "2006-Jan-02"
 
-/*
-overwatch start <hour>
-overwatch stop <hour>
-overwatch overtime --day="12121" --reason="MSG"
-overwarch query --from="2015-12-11" --to="2015-12-11" --week --month
-overwatch alarm enable <8h> | disable | check
-overwatch report --template="<path>" --from="" --to="" --workday=8h --after=1h --gran=30m
-*/
+const help string = `
+overwatcher <command>
 
-func runStart(when time.Time) {
-	lockfile := Lockfile{lockFilePath}
+work time logging script.
 
-	err := lockfile.TryWriteTime(when)
-	if err != nil {
-		log.Fatal(err)
-	}
-}
+	start		log workday start
+	stop		log workday end (can be called multiples times a day)
+	update		update info about workday (enter, leave time, overtime reason)
+	query		display info about work workdays
+	report		genereate overtimes report
 
-func runEnd(when time.Time) {
-	lockfile := Lockfile{lockFilePath}
+Please type "overwatcher <command> -h" for help
+`
 
-	start, err := lockfile.LoadTime()
-	if err != nil {
-		log.Fatal(err)
-	}
+const logTemplate = `{{"Day" | printf "%-15s"}}{{"Enter" | printf "%-15s"}}{{"Leave" | printf "%-15s"}}{{"TotalWorktime" | printf "%-15s"}}{{"Breaks" | printf "%-15s"}}{{"Reason" | printf "%-15s"}}
+{{range .}}{{.EnterTime | format_date "2006-Jan-02" | printf "%-15s"}}{{.EnterTime | format_date "3:04PM" | printf "%-15s"}}{{.LeaveTime | format_date "3:04PM" | printf "%-15s"}}{{.TotalTime | printf "%-15s"}}{{.Breaks | printf "%-15s"}}{{.OvertimeReason | printf "%-15s"}}
+{{end}}`
 
-	err = CreateWorkLog(start, when.UTC())
-	if err != nil {
-		log.Fatal(err)
-	}
-	lockfile.Remove()
-}
-
-func updateOvertime(dayFlag, reasonFlag *string) {
-	var day time.Time
-	var err error
-	if *dayFlag == "" {
-		day = time.Now()
-	} else {
-		day, err = time.Parse("2006-Jan-02", *dayFlag)
+// functions needed for template formatting
+var logTemplateFuncs = template.FuncMap{
+	"format_date": func(format string, date time.Time) string {
+		return date.Format(format)
+	},
+	"parse_duration": func(diff string) time.Duration {
+		dur, err := time.ParseDuration(diff)
 		if err != nil {
-			log.Fatal("failed: ", err)
+			log.Fatal("ParseDuration failed: %q", err)
+		}
+		return dur
+	},
+	"add": func(tm time.Time, diff time.Duration) time.Time {
+		return tm.Add(diff)
+	},
+}
+
+func handleStartCmd() {
+	wl, err := QueryWorkLog(time.Now())
+	if err != nil {
+		log.Fatal(err)
+	}
+	if wl == nil {
+		wl = NewWorkLog()
+	}
+	wl.SetEnterTime(time.Now())
+	err = StoreWorkLog(wl)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func handleStopCmd() {
+	wl, err := QueryWorkLog(time.Now())
+	if err != nil {
+		log.Fatal(err)
+	}
+	if wl == nil {
+		log.Fatal("No worklogs for today...")
+	}
+	wl.SetLeaveTime(time.Now())
+	err = StoreWorkLog(wl)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func ParseHourAtDay(day time.Time, kitchenString string) (time.Time, error) {
+	hourTime, err := time.ParseInLocation(time.Kitchen, kitchenString, time.Local)
+	if err != nil {
+		return time.Time{}, err
+	}
+	return time.Date(day.Year(), day.Month(), day.Day(),
+		hourTime.Hour(), hourTime.Minute(), hourTime.Second(), 0, day.Location()), nil
+}
+
+func handleUpdateCmd() {
+	var dayTime, newTime time.Time
+	var err error
+
+	// parse day
+	if day != "" {
+		if dayTime, err = time.ParseInLocation(defaultTimeFormat, day, time.Local); err != nil {
+			log.Fatal("Invalid date format: ", err)
+		}
+	} else {
+		dayTime = time.Now()
+	}
+
+	worklog, err := QueryWorkLog(dayTime)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if worklog == nil {
+		log.Fatalln("No worklog")
+	}
+
+	if reason != "" {
+		worklog.OvertimeReason = reason
+	}
+	if breaks != "" {
+		dur, err := time.ParseDuration(breaks)
+		if err != nil {
+			log.Fatal("Invalid break duration: ", dur)
+		}
+		worklog.Breaks = dur
+	}
+	if enter != "" {
+		if newTime, err = ParseHourAtDay(dayTime, enter); err != nil {
+			log.Fatal("Invalid date format: ", err)
+		}
+		if err = worklog.SetEnterTime(newTime); err != nil {
+			log.Fatal(err)
 		}
 	}
-	err = UpdateOvertime(day, reasonFlag)
-	if err != nil {
-		log.Fatal(err)
+	if leave != "" {
+		if newTime, err = ParseHourAtDay(dayTime, leave); err != nil {
+			log.Fatal("Invalid date format: ", err)
+		}
+		if err = worklog.SetLeaveTime(newTime); err != nil {
+			log.Fatal(err)
+		}
+	}
+	if err = StoreWorkLog(worklog); err != nil {
+		log.Fatalln(err)
 	}
 }
 
-func queryLogs(out io.Writer, from, to time.Time) {
+func handleReportCommand() {
+	var dayTime time.Time
 	var err error
-	logs, err := QueryLogs(from, to)
+
+	// parse day
+	if day != "" {
+		if dayTime, err = time.ParseInLocation(defaultTimeFormat, day, time.Local); err != nil {
+			log.Fatal("Invalid date format: ", err)
+		}
+	} else {
+		dayTime = time.Now()
+	}
+
+	// get template
+	if templatePath == "" {
+		log.Fatal("No template parameter, please check \"overwatcher report -h\"")
+	}
+	tmpl, err := template.New("report.template").Funcs(logTemplateFuncs).ParseFiles(templatePath)
+	if err != nil {
+		log.Fatal("Unable to load template: %q", err)
+	}
+
+	worklog, err := QueryWorkLog(dayTime)
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	err = tmpl.Execute(os.Stdout, worklog)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func handleQueryCommand() {
+	var to, from time.Time
+	if week {
+		to = time.Now()
+		from = time.Date(time.Now().Year(), time.Now().Month(), time.Now().Day()-7, 0, 0, 0, 0, time.Local)
+	} else if month {
+		from = time.Date(time.Now().Year(), time.Now().Month(), 1, 0, 0, 0, 0, time.Local)
+		to = from.AddDate(0, 1, 0)
+	} else {
+		from, _ = time.Parse(defaultTimeFormat, fromDate)
+		to, _ = time.Parse(defaultTimeFormat, toDate)
+	}
+	logs, err := QueryWorkLogs(from, to)
+	if err != nil {
+		log.Fatal(err)
+	}
+	printLogs(os.Stdout, logs)
+}
+
+func printLogs(out io.Writer, logs []*WorkLog) {
 	if len(logs) == 0 {
-		fmt.Fprintln(out, "No worklog")
+		fmt.Fprintln(out, "No worklogs")
 		return
 	}
-	for _, log := range logs {
-		fmt.Fprintln(out, log.Start.Format(defaultTimeFormat), "\t",
-			log.Start.Format(time.Kitchen), "\t", log.End.Format(time.Kitchen),
-			"\t", log.End.Sub(log.Start).String(), "\t", log.NetLen.String())
-	}
-}
-
-func dateFromTodayHour(hour time.Time) time.Time {
-	now := time.Now()
-	return time.Date(now.Year(), now.Month(), now.Day(), hour.Hour(), hour.Minute(), hour.Second(), 0, time.Local)
-}
-
-func checkAlarm() {
-	alarmlockfile := Lockfile{alarmLockFilePath}
-	lockfile := Lockfile{lockFilePath}
-
-	start, err := lockfile.LoadTime()
+	templ, err := template.New("log").Funcs(logTemplateFuncs).Parse(logTemplate)
 	if err != nil {
-		//FIXME check fle existast error code
-		return
+		panic("unable to parse template")
 	}
-	dur, err := alarmlockfile.LoadDuration()
+	err = templ.Execute(out, logs)
 	if err != nil {
 		log.Fatal(err)
 	}
-	if start.Add(dur).Before(time.Now()) {
-		writer := pts.NewPts()
-
-		fmt.Fprintln(writer, "WORK DAY OVER!!! GO HOME")
-		fmt.Fprintln(writer, "WORK DAY OVER!!! GO HOME")
-		fmt.Fprintln(writer, "WORK DAY OVER!!! GO HOME")
-	}
 }
 
-func enableAlarm(d time.Duration) {
-	file, err := os.OpenFile(alarmLockFilePath, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0600)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer file.Close()
-
-	_, err = file.WriteString(d.String())
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.Println("Alarm will trigger after ", d.String())
+func init() {
+	updateCmd.StringVar(&day, "day", "", "day to update (eg. 2016-Oct-11)")
+	updateCmd.StringVar(&reason, "reason", "", "reson of overtime")
+	updateCmd.StringVar(&enter, "enter", "", "time of enter (eg. 7:22AM, 10:23PM)")
+	updateCmd.StringVar(&leave, "leave", "", "time of leave (eg. 7:22AM, 10:23PM)")
+	updateCmd.StringVar(&breaks, "break", "", "breaks made during workday (eg. 2h30m)")
+	queryCmd.StringVar(&fromDate, "from", time.Now().Format(defaultTimeFormat), "day to query (YYYY-Month-DD)")
+	queryCmd.StringVar(&toDate, "to", time.Now().Format(defaultTimeFormat), "day to query (YYYY-Month-DD)")
+	queryCmd.BoolVar(&week, "week", false, "print worklogs for this week")
+	queryCmd.BoolVar(&month, "month", false, "print worklogs for this month")
+	reportCmd.StringVar(&templatePath, "template", "", "path to report template.")
 }
 
-func disableAlarm() {
-	lockfile := Lockfile{alarmLockFilePath}
-	lockfile.Remove()
-}
-
-func main() {
+func initDb() {
 	usr, err := user.Current()
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = InitSQLDb(path.Join(usr.HomeDir, ".overwatcher.db"))
+	err = InitDb(path.Join(usr.HomeDir, ".overwatcher.db"))
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer ShutdownSQLDb()
+}
 
-	lockFilePath = path.Join(usr.HomeDir, ".overwatcher.lock")
-	alarmLockFilePath = path.Join(usr.HomeDir, ".overwatcher.alarm")
+func main() {
+	var err error
 
-	startCmd := flag.NewFlagSet("start", flag.ExitOnError)
-	startTime := startCmd.String("time", time.Now().Format(time.Kitchen), "time of workday start")
-
-	stopCmd := flag.NewFlagSet("stop", flag.ExitOnError)
-	endTime := stopCmd.String("time", time.Now().Format(time.Kitchen), "time of workday end")
-
-	overtimeCmd := flag.NewFlagSet("update", flag.ExitOnError)
-	dayFlag := overtimeCmd.String("day", time.Now().Format(defaultTimeFormat), "day to update (YYYY-Month-DD)")
-	reasonFlag := overtimeCmd.String("reason", "", "reson of overtime")
-
-	queryCmd := flag.NewFlagSet("query", flag.ExitOnError)
-	fromFlag := queryCmd.String("from", time.Now().Format(defaultTimeFormat), "first day to query (YYYY-Month-DD)")
-	toFlag := queryCmd.String("to", time.Now().Format(defaultTimeFormat), "last day to query (YYYY-Month-DD)")
-	weekFlag := queryCmd.Bool("week", false, "print worklog for current week")
-	monthFlag := queryCmd.Bool("month", false, "print worklog for current month")
-
-	enableAlarmSubCmd := flag.NewFlagSet("enable", flag.ExitOnError)
-	durationLen := enableAlarmSubCmd.Duration("after", time.Hour*8, "Duration since first work start")
-
-	disableAlarmSubCmd := flag.NewFlagSet("disable", flag.ExitOnError)
-	checkAlarmSubCmd := flag.NewFlagSet("check", flag.ExitOnError)
+	initDb()
 
 	if len(os.Args) == 1 {
-		fmt.Println("overwatcher <command>")
-		fmt.Println("")
-		fmt.Println("work time logging")
-		fmt.Println("\tstart - log workday start")
-		fmt.Println("\tstop - log workday end (can be called multiples times a day)")
-		fmt.Println("\tovertime - add info about overtime")
-		fmt.Println("\tquery - log info about work day")
-		fmt.Println("\talarm - inform about work day end")
-		fmt.Println("\treport - genereate overtimes report")
+		fmt.Println(help)
 		os.Exit(1)
 	}
-
-	err = nil
 
 	switch os.Args[1] {
 	case "start":
 		err = startCmd.Parse(os.Args[2:])
 	case "stop":
 		err = stopCmd.Parse(os.Args[2:])
-	case "overtime":
-		err = overtimeCmd.Parse(os.Args[2:])
+	case "update":
+		err = updateCmd.Parse(os.Args[2:])
 	case "query":
 		err = queryCmd.Parse(os.Args[2:])
-	case "alarm":
-		if len(os.Args) < 3 {
-			log.Fatal("enable|disble|check expected")
-		}
-		switch os.Args[2] {
-		case "enable":
-			err = enableAlarmSubCmd.Parse(os.Args[3:])
-		case "disable":
-			err = disableAlarmSubCmd.Parse(os.Args[3:])
-		case "check":
-			err = checkAlarmSubCmd.Parse(os.Args[3:])
-		default:
-			log.Fatal("enable|disble|check expected")
-		}
+	case "report":
+		err = reportCmd.Parse(os.Args[2:])
+	case "help":
+		fmt.Println(help)
+		os.Exit(0)
 	default:
-		log.Fatalf("%q is not valid command", os.Args[1])
+		log.Fatalf("%q is not valid command.", os.Args[1])
 	}
 	if err != nil {
-		log.Fatal(err)
+		os.Exit(1)
 	}
 	if startCmd.Parsed() {
-		tm, err := time.Parse(time.Kitchen, *startTime)
-		if err != nil {
-			log.Fatal(err)
-		}
-		runStart(dateFromTodayHour(tm))
+		handleStartCmd()
 	}
 	if stopCmd.Parsed() {
-		tm, err := time.Parse(time.Kitchen, *endTime)
-		if err != nil {
-			log.Fatal(err)
-		}
-		runEnd(dateFromTodayHour(tm))
+		handleStopCmd()
 	}
-	if overtimeCmd.Parsed() {
-		updateOvertime(dayFlag, reasonFlag)
+	if updateCmd.Parsed() {
+		handleUpdateCmd()
 	}
 	if queryCmd.Parsed() {
-		var to, from time.Time
-		if *weekFlag {
-			to = time.Now()
-			from = time.Date(time.Now().Year(), time.Now().Month(), time.Now().Day()-7, 0, 0, 0, 0, time.Local)
-		} else if *monthFlag {
-			from = time.Date(time.Now().Year(), time.Now().Month(), 1, 0, 0, 0, 0, time.Local)
-			to = from.AddDate(0, 1, 0)
-		} else {
-			from, _ = time.Parse(defaultTimeFormat, *fromFlag)
-			to, _ = time.Parse(defaultTimeFormat, *toFlag)
-		}
-		queryLogs(os.Stdout, from, to)
+		handleQueryCommand()
 	}
-	if enableAlarmSubCmd.Parsed() {
-		enableAlarm(*durationLen)
-	}
-	if checkAlarmSubCmd.Parsed() {
-		checkAlarm()
-	}
-	if disableAlarmSubCmd.Parsed() {
-		disableAlarm()
+	if reportCmd.Parsed() {
+		handleReportCommand()
 	}
 }
