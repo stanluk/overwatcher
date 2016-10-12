@@ -140,7 +140,7 @@ func handleUpdateCmd() {
 	}
 
 	if worklog == nil {
-		log.Fatalln("No worklog")
+		worklog = &WorkLog{enter: dayTime, leave: dayTime}
 	}
 
 	if reason != "" {
