@@ -1,5 +1,5 @@
 Name: Lukasz Stanislawski
 Reason: {{.OvertimeReason}}
 Work started: {{.EnterTime | format_date "2006:01:02 15:04"}}
-Overtime started: {{ parse_duration "9h" | add .EnterTime | format_date "2006:01:02 15:04"}}
-Overtime ended: {{.LeaveTime | format_date "2006:01:02 15:04"}}
+{{with $overtimeLen := parse_duration "9h" | .Overtime }}Overtime started: {{ .Start | format_date "2006:01:02 15:04"}}
+Overtime ended: {{ parse_duration "15m" | round_down .Duration | add .Start | format_date "2006:01:02 15:04"}}{{end}}

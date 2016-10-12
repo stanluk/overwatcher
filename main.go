@@ -71,6 +71,15 @@ var logTemplateFuncs = template.FuncMap{
 	"add": func(tm time.Time, diff time.Duration) time.Time {
 		return tm.Add(diff)
 	},
+	"sub": func(diff1, diff2 time.Duration) time.Duration {
+		return diff1 - diff2
+	},
+	"round_down": func(diff1, granulation time.Duration) time.Duration {
+		return diff1 - diff1%granulation
+	},
+	"round_up": func(diff1, granulation time.Duration) time.Duration {
+		return diff1 + (granulation - diff1%granulation)
+	},
 }
 
 func handleStartCmd() {

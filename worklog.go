@@ -12,6 +12,11 @@ type WorkLog struct {
 	OvertimeReason string
 }
 
+type Overtime struct {
+	Start    time.Time
+	Duration time.Duration
+}
+
 func NewWorkLog() *WorkLog {
 	return &WorkLog{enter: time.Now(), leave: time.Now(), Breaks: 0, OvertimeReason: ""}
 }
@@ -51,4 +56,14 @@ func (this *WorkLog) SetEnterTime(tm time.Time) error {
 		return nil
 	}
 	return fmt.Errorf("Invalid date: Enter time after leave time: %q", this.leave)
+}
+
+func (this *WorkLog) Overtime(workday_len time.Duration) Overtime {
+	var ret Overtime
+
+	if this.TotalTime() > workday_len {
+		ret.Duration = this.TotalTime() - workday_len
+		ret.Start = this.enter.Add(workday_len).Add(this.Breaks)
+	}
+	return ret
 }
