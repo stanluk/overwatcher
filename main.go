@@ -20,7 +20,7 @@ var (
 	reportCmd flag.FlagSet // overwatcher report
 
 	// overwatcher update flags
-	day    string
+	day    string // shared with 'overwatcher report'
 	reason string
 	enter  string
 	leave  string
@@ -201,6 +201,10 @@ func handleReportCommand() {
 		log.Fatal(err)
 	}
 
+	if worklog == nil {
+		log.Fatal("No worklog in day: ", dayTime)
+	}
+
 	err = tmpl.Execute(os.Stdout, worklog)
 	if err != nil {
 		log.Fatal(err)
@@ -252,6 +256,7 @@ func init() {
 	queryCmd.BoolVar(&week, "week", false, "print worklogs for this week")
 	queryCmd.BoolVar(&month, "month", false, "print worklogs for this month")
 	reportCmd.StringVar(&templatePath, "template", "", "path to report template.")
+	reportCmd.StringVar(&day, "day", "", "day to update (eg. 2016-Oct-11)")
 }
 
 func initDb() {
