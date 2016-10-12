@@ -32,7 +32,7 @@ func StoreWorkLog(wl *WorkLog) error {
 	res, err := db.Exec(`
 			INSERT OR IGNORE INTO worklog VALUES(DATE(?),?,?,?,?);
 			UPDATE worklog
-			SET enter=?, leave=?, extra=?, reason=? WHERE day=DATE(?);`,
+			SET enter=?, leave=?, extra=?, reason=? WHERE DATE(day)=DATE(?);`,
 		wl.EnterTime(), wl.EnterTime(), wl.LeaveTime(), wl.Breaks, wl.OvertimeReason,
 		wl.EnterTime(), wl.LeaveTime(), wl.Breaks, wl.OvertimeReason, wl.EnterTime())
 	if err != nil {
@@ -47,7 +47,7 @@ func QueryWorkLogs(from, to time.Time) ([]*WorkLog, error) {
 
 	rows, err := db.Query(`
 			SELECT strftime('%s', enter), strftime('%s', leave), extra, reason FROM worklog
-			WHERE day>=DATE(?) AND day<=DATE(?);
+			WHERE DATE(day)>=DATE(?) AND DATE(day)<=DATE(?);
 		`, from, to)
 	if err != nil {
 		return nil, err

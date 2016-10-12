@@ -220,8 +220,8 @@ func handleQueryCommand() {
 		from = time.Date(time.Now().Year(), time.Now().Month(), 1, 0, 0, 0, 0, time.Local)
 		to = from.AddDate(0, 1, 0)
 	} else {
-		from, _ = time.Parse(defaultTimeFormat, fromDate)
-		to, _ = time.Parse(defaultTimeFormat, toDate)
+		from, _ = time.ParseInLocation(defaultTimeFormat, fromDate, time.Local)
+		to, _ = time.ParseInLocation(defaultTimeFormat, toDate, time.Local)
 	}
 	logs, err := QueryWorkLogs(from, to)
 	if err != nil {
