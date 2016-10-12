@@ -48,7 +48,7 @@ func QueryWorkLogs(from, to time.Time) ([]*WorkLog, error) {
 	rows, err := db.Query(`
 			SELECT strftime('%s', enter), strftime('%s', leave), extra, reason FROM worklog
 			WHERE day>=DATE(?) AND day<=DATE(?);
-		`, from.UTC(), to.UTC())
+		`, from, to)
 	if err != nil {
 		return nil, err
 	}
