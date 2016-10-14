@@ -8,6 +8,7 @@ import (
 )
 
 var db *sql.DB
+var date_format = "2006-01-02"
 
 func InitDb(path string) error {
 	var err error
@@ -20,7 +21,7 @@ func InitDb(path string) error {
 		return err
 	}
 	_, err = db.Exec(`
-		CREATE TABLE IF NOT EXISTS worklog (day date PRIMARY KEY, enter timestamp,
+		CREATE TABLE IF NOT EXISTS worklog (local_date string PRIMARY KEY, enter timestamp,
 		leave timestamp, extra INT DEFAULT 0, reason varchar(256));
 		`)
 	return err
@@ -30,11 +31,11 @@ func ShutdownDb() error { return db.Close() }
 
 func StoreWorkLog(wl *WorkLog) error {
 	res, err := db.Exec(`
-			INSERT OR IGNORE INTO worklog VALUES(DATE(?),?,?,?,?);
+			INSERT OR IGNORE INTO worklog VALUES(?,?,?,?,?);
 			UPDATE worklog
-			SET enter=?, leave=?, extra=?, reason=? WHERE DATE(day)=DATE(?);`,
-		wl.EnterTime(), wl.EnterTime(), wl.LeaveTime(), wl.Breaks, wl.OvertimeReason,
-		wl.EnterTime(), wl.LeaveTime(), wl.Breaks, wl.OvertimeReason, wl.EnterTime())
+			SET enter=?, leave=?, extra=?, reason=? WHERE local_date=?;`,
+		wl.EnterTime().Format(date_format), wl.EnterTime(), wl.LeaveTime(), wl.Breaks, wl.OvertimeReason,
+		wl.EnterTime(), wl.LeaveTime(), wl.Breaks, wl.OvertimeReason, wl.EnterTime().Format(date_format))
 	if err != nil {
 		return fmt.Errorf("StoreWorkLog failed: ", err)
 	}
@@ -47,8 +48,8 @@ func QueryWorkLogs(from, to time.Time) ([]*WorkLog, error) {
 
 	rows, err := db.Query(`
 			SELECT strftime('%s', enter), strftime('%s', leave), extra, reason FROM worklog
-			WHERE DATE(day)>=DATE(?) AND DATE(day)<=DATE(?)
-			ORDER BY DATE(day);
+			WHERE enter>=? AND enter<=?
+			ORDER BY enter;
 		`, from, to)
 	if err != nil {
 		return nil, err
@@ -68,7 +69,9 @@ func QueryWorkLogs(from, to time.Time) ([]*WorkLog, error) {
 }
 
 func QueryWorkLog(day time.Time) (*WorkLog, error) {
-	logs, err := QueryWorkLogs(day, day)
+	y, m, d := day.Date()
+	rounded := time.Date(y, m, d, 0, 0, 0, 0, day.Location())
+	logs, err := QueryWorkLogs(rounded, rounded.AddDate(0, 0, 1))
 	if err != nil {
 		return nil, err
 	}
@@ -79,4 +82,5 @@ func QueryWorkLog(day time.Time) (*WorkLog, error) {
 		panic("Invalid worklogs count.")
 	}
 	return logs[0], nil
+
 }
