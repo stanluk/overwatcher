@@ -252,7 +252,7 @@ func init() {
 	updateCmd.StringVar(&leave, "leave", "", "time of leave (eg. 7:22AM, 10:23PM)")
 	updateCmd.StringVar(&breaks, "break", "", "breaks made during workday (eg. 2h30m)")
 	queryCmd.StringVar(&fromDate, "from", time.Now().Format(defaultTimeFormat), "day to query (YYYY-Month-DD)")
-	queryCmd.StringVar(&toDate, "to", time.Now().Format(defaultTimeFormat), "day to query (YYYY-Month-DD)")
+	queryCmd.StringVar(&toDate, "to", time.Now().AddDate(0, 0, 1).Format(defaultTimeFormat), "day to query (YYYY-Month-DD)")
 	queryCmd.BoolVar(&week, "week", false, "print worklogs for this week")
 	queryCmd.BoolVar(&month, "month", false, "print worklogs for this month")
 	reportCmd.StringVar(&templatePath, "template", "", "path to report template.")
