@@ -191,7 +191,7 @@ func handleReportCommand() {
 	if templatePath == "" {
 		log.Fatal("No template parameter, please check \"overwatcher report -h\"")
 	}
-	tmpl, err := template.New("report.template").Funcs(logTemplateFuncs).ParseFiles(templatePath)
+	tmpl, err := template.New(templatePath).Funcs(logTemplateFuncs).ParseFiles(templatePath)
 	if err != nil {
 		log.Fatal("Unable to load template: %q", err)
 	}
@@ -205,7 +205,7 @@ func handleReportCommand() {
 		log.Fatal("No worklog in day: ", dayTime)
 	}
 
-	err = tmpl.Execute(os.Stdout, worklog)
+	err = tmpl.ExecuteTemplate(os.Stdout, templatePath, worklog)
 	if err != nil {
 		log.Fatal(err)
 	}
