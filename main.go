@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/user"
@@ -187,13 +188,13 @@ func handleReportCommand() {
 		dayTime = time.Now()
 	}
 
-	// get template
-	if templatePath == "" {
-		log.Fatal("No template parameter, please check \"overwatcher report -h\"")
-	}
-	tmpl, err := template.New(templatePath).Funcs(logTemplateFuncs).ParseFiles(templatePath)
+	f, err := ioutil.ReadFile(templatePath)
 	if err != nil {
-		log.Fatal("Unable to load template: %q", err)
+		log.Fatal("ReadFile failed: ", err)
+	}
+	tmpl, err := template.New(templatePath).Funcs(logTemplateFuncs).Parse(string(f))
+	if err != nil {
+		log.Fatal("Unable to load template: ", err)
 	}
 
 	worklog, err := QueryWorkLog(dayTime)
